@@ -1,0 +1,29 @@
+{
+  "name": "homebridge-shelly-trv",
+  "version": "1.0.0",
+  "description": "Homebridge Plugin für Shelly TRV Gen1 Heizkörperthermostate",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "shelly",
+    "trv",
+    "thermostat",
+    "homekit"
+  ],
+  "engines": {
+    "node": ">=10.17.0",
+    "homebridge": ">=1.0.0"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}
+

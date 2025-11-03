@@ -1,0 +1,42 @@
+{
+  "pluginAlias": "ShellyTRV",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "required": true,
+        "default": "Shelly TRV",
+        "description": "Name der Platform in Homebridge"
+      },
+      "devices": {
+        "title": "Shelly TRV Geräte",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Gerätename",
+              "type": "string",
+              "required": true,
+              "description": "Name des Shelly TRV Geräts (wird in HomeKit angezeigt)"
+            },
+            "ip": {
+              "title": "IP-Adresse",
+              "type": "string",
+              "required": true,
+              "format": "ipv4",
+              "description": "IP-Adresse des Shelly TRV Geräts im lokalen Netzwerk"
+            }
+          }
+        },
+        "required": true,
+        "description": "Liste der zu konfigurierenden Shelly TRV Geräte"
+      }
+    }
+  }
+}
+
