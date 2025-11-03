@@ -65,37 +65,31 @@ class ShellyAPIClient {
   }
 
   /**
-   * Setzt die Zielposition des Ventils (target_pos: 0-100)
-   * @param {number} targetPos - Position zwischen 0 und 100
+   * Setzt die Zieltemperatur des Thermostats
+   * @param {number} temperature - Temperatur in Grad Celsius (z.B. 20.5)
    * @returns {Promise<void>}
    */
-  async setTargetPosition(targetPos) {
-    // Stelle sicher, dass targetPos im gültigen Bereich ist
-    const clampedPos = Math.max(0, Math.min(100, Math.round(targetPos)));
+  async setTargetTemperature(temperature) {
+    // Stelle sicher, dass Temperatur im gültigen Bereich ist (5-35°C)
+    const clampedTemp = Math.max(5, Math.min(35, Math.round(temperature * 2) / 2)); // Runden auf 0.5
     
     try {
-      const response = await axios.post(
-        `${this.baseURL}/settings?target_pos=${clampedPos}`,
-        null,
-        {
-          timeout: this.timeout,
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        }
-      );
+      const url = `${this.baseURL}/settings/thermostat/0?target_t_enabled=1&target_t=${clampedTemp}`;
+      const response = await axios.get(url, {
+        timeout: this.timeout
+      });
       
-      this.log(`Target Position erfolgreich gesetzt: ${clampedPos}%`);
+      this.log(`Target Temperature erfolgreich gesetzt: ${clampedTemp}°C`);
       return response.data;
     } catch (error) {
       if (error.code === 'ECONNABORTED') {
-        this.log.error(`Timeout beim Setzen der Target Position von ${this.ipAddress}`);
+        this.log.error(`Timeout beim Setzen der Target Temperature von ${this.ipAddress}`);
         throw new Error('Timeout: Gerät antwortet nicht');
       } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
         this.log.error(`Gerät nicht erreichbar: ${this.ipAddress}`);
         throw new Error('Gerät nicht erreichbar');
       } else {
-        this.log.error(`Fehler beim Setzen der Target Position: ${error.message}`);
+        this.log.error(`Fehler beim Setzen der Target Temperature: ${error.message}`);
         throw error;
       }
     }

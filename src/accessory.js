@@ -82,11 +82,22 @@ class ShellyTRVAccessory {
   async getTargetTemperature(callback) {
     try {
       const status = await this.apiClient.getStatus();
-      if (status && status.target_pos !== undefined) {
-        // Konvertiere target_pos (0-100) zu Temperatur (5-35°C)
-        const temperature = this.targetPosToTemperature(status.target_pos);
-        this.log(`Target Temperature abgerufen: ${temperature}°C (target_pos: ${status.target_pos})`);
-        callback(null, temperature);
+      let targetTemp = null;
+      
+      // Prüfe die tatsächliche Struktur: thermostats[0].target_t.value
+      if (status && status.thermostats && status.thermostats[0] && status.thermostats[0].target_t && status.thermostats[0].target_t.value !== undefined) {
+        targetTemp = status.thermostats[0].target_t.value;
+      } else if (status && status.target_t !== undefined) {
+        // Fallback für andere mögliche Strukturen
+        targetTemp = typeof status.target_t === 'object' ? status.target_t.value : status.target_t;
+      } else if (status && status.target_pos !== undefined) {
+        // Fallback: Wenn noch alte API-Struktur vorhanden ist
+        targetTemp = this.targetPosToTemperature(status.target_pos);
+      }
+      
+      if (targetTemp !== null) {
+        this.log(`Target Temperature abgerufen: ${targetTemp}°C`);
+        callback(null, targetTemp);
       } else {
         callback(new Error('Keine Target Temperature verfügbar'));
       }
@@ -98,11 +109,9 @@ class ShellyTRVAccessory {
 
   async setTargetTemperature(value, callback) {
     try {
-      // Konvertiere Temperatur (5-35°C) zu target_pos (0-100)
-      const targetPos = this.temperatureToTargetPos(value);
-      this.log(`Setze Target Temperature auf ${value}°C (target_pos: ${targetPos})`);
+      this.log(`Setze Target Temperature auf ${value}°C`);
       
-      await this.apiClient.setTargetPosition(targetPos);
+      await this.apiClient.setTargetTemperature(value);
       
       // Aktualisiere sofort den Status
       setTimeout(() => this.updateStatus(), 1000);
@@ -117,8 +126,17 @@ class ShellyTRVAccessory {
   async getCurrentTemperature(callback) {
     try {
       const status = await this.apiClient.getStatus();
-      if (status && status.temp !== undefined) {
-        const temperature = status.temp;
+      let temperature = null;
+      
+      // Prüfe die tatsächliche Struktur: thermostats[0].tmp.value
+      if (status && status.thermostats && status.thermostats[0] && status.thermostats[0].tmp && status.thermostats[0].tmp.value !== undefined) {
+        temperature = status.thermostats[0].tmp.value;
+      } else if (status && status.temp !== undefined) {
+        // Fallback für andere mögliche Strukturen
+        temperature = typeof status.temp === 'object' ? status.temp.value : status.temp;
+      }
+      
+      if (temperature !== null) {
         this.log(`Current Temperature abgerufen: ${temperature}°C`);
         callback(null, temperature);
       } else {
@@ -134,8 +152,22 @@ class ShellyTRVAccessory {
     try {
       const status = await this.apiClient.getStatus();
       if (status) {
-        // Wenn target_pos > 0, dann ist Heizung AN
-        const state = status.target_pos > 0 
+        // Prüfe ob Thermostat aktiviert ist: thermostats[0].target_t.enabled
+        let isEnabled = false;
+        if (status.thermostats && status.thermostats[0] && status.thermostats[0].target_t && status.thermostats[0].target_t.enabled !== undefined) {
+          isEnabled = status.thermostats[0].target_t.enabled === true;
+        } else if (status.target_t_enabled !== undefined) {
+          isEnabled = status.target_t_enabled === 1 || status.target_t_enabled === true;
+        } else if (status.target_t !== undefined) {
+          // Wenn target_t gesetzt ist und > 5°C, dann ist es aktiviert
+          const targetTemp = typeof status.target_t === 'object' ? status.target_t.value : status.target_t;
+          isEnabled = targetTemp > 5;
+        } else if (status.target_pos !== undefined && status.target_pos > 0) {
+          // Fallback für alte API-Struktur
+          isEnabled = true;
+        }
+        
+        const state = isEnabled 
           ? this.hap.Characteristic.TargetHeatingCoolingState.HEAT
           : this.hap.Characteristic.TargetHeatingCoolingState.OFF;
         callback(null, state);
@@ -151,17 +183,30 @@ class ShellyTRVAccessory {
   async setTargetHeatingCoolingState(value, callback) {
     try {
       if (value === this.hap.Characteristic.TargetHeatingCoolingState.OFF) {
-        // Ventil schließen
-        this.log('Schließe Ventil (Heizung aus)');
-        await this.apiClient.setTargetPosition(0);
+        // Thermostat deaktivieren (target_t_enabled=0)
+        // Setze niedrige Temperatur als deaktiviert
+        this.log('Deaktiviere Thermostat (Heizung aus)');
+        await this.apiClient.setTargetTemperature(5);
       } else if (value === this.hap.Characteristic.TargetHeatingCoolingState.HEAT) {
-        // Ventil öffnen (auf vorherige Temperatur oder Standard)
-        this.log('Öffne Ventil (Heizung an)');
+        // Thermostat aktivieren (auf vorherige Temperatur oder Standard)
+        this.log('Aktiviere Thermostat (Heizung an)');
         const currentStatus = await this.apiClient.getStatus();
-        if (currentStatus && currentStatus.target_pos === 0) {
-          // Setze auf Standard-Temperatur (20°C) wenn Ventil geschlossen war
-          await this.apiClient.setTargetPosition(this.temperatureToTargetPos(20));
+        let targetTemp = 20; // Standard
+        
+        // Versuche aktuelle target_t zu lesen: thermostats[0].target_t.value
+        if (currentStatus && currentStatus.thermostats && currentStatus.thermostats[0] && currentStatus.thermostats[0].target_t && currentStatus.thermostats[0].target_t.value !== undefined) {
+          const currentTarget = currentStatus.thermostats[0].target_t.value;
+          if (currentTarget > 5) {
+            targetTemp = currentTarget;
+          }
+        } else if (currentStatus && currentStatus.target_t !== undefined) {
+          const currentTarget = typeof currentStatus.target_t === 'object' ? currentStatus.target_t.value : currentStatus.target_t;
+          if (currentTarget > 5) {
+            targetTemp = currentTarget;
+          }
         }
+        
+        await this.apiClient.setTargetTemperature(targetTemp);
       }
       setTimeout(() => this.updateStatus(), 1000);
       callback(null);
@@ -175,8 +220,14 @@ class ShellyTRVAccessory {
     try {
       const status = await this.apiClient.getStatus();
       if (status) {
-        // Zeige Heizstatus basierend auf valve_pos (Ventilposition)
-        const valvePos = status.valve_pos || 0;
+        // Zeige Heizstatus basierend auf pos (Ventilposition): thermostats[0].pos
+        let valvePos = 0;
+        if (status.thermostats && status.thermostats[0] && status.thermostats[0].pos !== undefined) {
+          valvePos = status.thermostats[0].pos;
+        } else if (status.valve_pos !== undefined) {
+          valvePos = status.valve_pos;
+        }
+        
         const state = valvePos > 10 // Wenn Ventil mehr als 10% geöffnet ist
           ? this.hap.Characteristic.CurrentHeatingCoolingState.HEAT
           : this.hap.Characteristic.CurrentHeatingCoolingState.OFF;
@@ -190,18 +241,12 @@ class ShellyTRVAccessory {
     }
   }
 
-  // Hilfsfunktionen für Temperatur-Konvertierung
+  // Hilfsfunktionen für Temperatur-Konvertierung (Fallback für alte API-Struktur)
   targetPosToTemperature(targetPos) {
     // target_pos 0-100 → Temperatur 5-35°C
     // Formel: temp = 5 + (target_pos * 0.3)
+    // Diese Funktion wird nur als Fallback verwendet, wenn die neue API-Struktur nicht verfügbar ist
     return Math.round((5 + (targetPos * 0.3)) * 2) / 2; // Runden auf 0.5
-  }
-
-  temperatureToTargetPos(temperature) {
-    // Temperatur 5-35°C → target_pos 0-100
-    // Formel: target_pos = (temp - 5) / 0.3
-    const pos = Math.round(((temperature - 5) / 0.3));
-    return Math.max(0, Math.min(100, pos)); // Begrenze auf 0-100
   }
 
   // Status-Polling
@@ -218,33 +263,46 @@ class ShellyTRVAccessory {
   async updateStatus() {
     try {
       const status = await this.apiClient.getStatus();
-      if (status) {
-        // Aktualisiere Characteristics
-        if (status.temp !== undefined) {
+      if (status && status.thermostats && status.thermostats[0]) {
+        const thermostat = status.thermostats[0];
+        
+        // Aktualisiere Current Temperature: thermostats[0].tmp.value
+        if (thermostat.tmp && thermostat.tmp.value !== undefined) {
+          const currentTemp = thermostat.tmp.value;
           this.thermostatService
-            .updateCharacteristic(this.hap.Characteristic.CurrentTemperature, status.temp);
+            .updateCharacteristic(this.hap.Characteristic.CurrentTemperature, currentTemp);
         }
 
-        if (status.target_pos !== undefined) {
-          const targetTemp = this.targetPosToTemperature(status.target_pos);
+        // Aktualisiere Target Temperature: thermostats[0].target_t.value
+        if (thermostat.target_t && thermostat.target_t.value !== undefined) {
+          const targetTemp = thermostat.target_t.value;
           this.thermostatService
             .updateCharacteristic(this.hap.Characteristic.TargetTemperature, targetTemp);
         }
 
-        // Update Heating Cooling States
-        const targetState = status.target_pos > 0
+        // Update Heating Cooling States: thermostats[0].target_t.enabled
+        let isEnabled = false;
+        if (thermostat.target_t && thermostat.target_t.enabled !== undefined) {
+          isEnabled = thermostat.target_t.enabled === true;
+        }
+
+        const targetState = isEnabled
           ? this.hap.Characteristic.TargetHeatingCoolingState.HEAT
           : this.hap.Characteristic.TargetHeatingCoolingState.OFF;
         this.thermostatService
           .updateCharacteristic(this.hap.Characteristic.TargetHeatingCoolingState, targetState);
 
-        const currentState = (status.valve_pos || 0) > 10
+        // Current State basierend auf Ventilposition: thermostats[0].pos
+        const valvePos = thermostat.pos !== undefined ? thermostat.pos : 0;
+        const currentState = valvePos > 10
           ? this.hap.Characteristic.CurrentHeatingCoolingState.HEAT
           : this.hap.Characteristic.CurrentHeatingCoolingState.OFF;
         this.thermostatService
           .updateCharacteristic(this.hap.Characteristic.CurrentHeatingCoolingState, currentState);
 
-        this.log.debug(`Status aktualisiert - Temp: ${status.temp}°C, Target: ${status.target_pos}%, Valve: ${status.valve_pos}%`);
+        const currentTemp = thermostat.tmp && thermostat.tmp.value !== undefined ? thermostat.tmp.value : 'N/A';
+        const targetTemp = thermostat.target_t && thermostat.target_t.value !== undefined ? thermostat.target_t.value : 'N/A';
+        this.log.debug(`Status aktualisiert - Temp: ${currentTemp}°C, Target: ${targetTemp}°C, Valve: ${valvePos}%, Enabled: ${isEnabled}`);
       }
     } catch (error) {
       this.log.error('Fehler beim Status-Update:', error.message);
