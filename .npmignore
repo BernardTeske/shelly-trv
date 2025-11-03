@@ -1,0 +1,42 @@
+# Dependency directories
+node_modules/
+
+# IDE and editor directories
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# Development files
+.vscode/
+.idea/
+plan.md
+
+# Test files
+test/
+tests/
+*.test.js
+*.spec.js
+
+# Build files (falls später TypeScript verwendet wird)
+*.tsbuildinfo
+dist/
+

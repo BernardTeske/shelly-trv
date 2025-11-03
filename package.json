@@ -11,6 +11,10 @@
     "type": "git",
     "url": "https://github.com/BernardTeske/shelly-trv.git"
   },
+  "bugs": {
+    "url": "https://github.com/BernardTeske/shelly-trv/issues"
+  },
+  "homepage": "https://github.com/BernardTeske/shelly-trv#readme",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
