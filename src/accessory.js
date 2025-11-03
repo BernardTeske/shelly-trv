@@ -24,6 +24,9 @@ class ShellyTRVAccessory {
     // Characteristics konfigurieren
     this.setupCharacteristics();
 
+    // Initialisiere Characteristics mit Startwerten (wichtig für HomeKit)
+    this.initializeCharacteristics();
+
     // Status-Polling starten
     this.startPolling();
   }
@@ -67,11 +70,15 @@ class ShellyTRVAccessory {
       .getCharacteristic(this.hap.Characteristic.CurrentHeatingCoolingState)
       .on('get', this.getCurrentHeatingCoolingState.bind(this));
 
-    // Temperature Display Units
+    // Temperature Display Units (immer Celsius)
     this.thermostatService
       .getCharacteristic(this.hap.Characteristic.TemperatureDisplayUnits)
       .on('get', (callback) => {
         callback(null, this.hap.Characteristic.TemperatureDisplayUnits.CELSIUS);
+      })
+      .on('set', (value, callback) => {
+        // Immer Celsius verwenden, andere Einheiten ignorieren
+        callback(null);
       });
 
     // Position State (für Ventil-Position)
@@ -247,6 +254,51 @@ class ShellyTRVAccessory {
     // Formel: temp = 5 + (target_pos * 0.3)
     // Diese Funktion wird nur als Fallback verwendet, wenn die neue API-Struktur nicht verfügbar ist
     return Math.round((5 + (targetPos * 0.3)) * 2) / 2; // Runden auf 0.5
+  }
+
+  // Initialisiere Characteristics mit Startwerten
+  async initializeCharacteristics() {
+    try {
+      // Setze initiale Werte, damit HomeKit die Temperatursteuerung erkennt
+      this.thermostatService
+        .updateCharacteristic(this.hap.Characteristic.TemperatureDisplayUnits, this.hap.Characteristic.TemperatureDisplayUnits.CELSIUS);
+
+      // Versuche aktuelle Werte zu laden
+      const status = await this.apiClient.getStatus();
+      if (status && status.thermostats && status.thermostats[0]) {
+        const thermostat = status.thermostats[0];
+        
+        if (thermostat.target_t && thermostat.target_t.value !== undefined) {
+          this.thermostatService
+            .updateCharacteristic(this.hap.Characteristic.TargetTemperature, thermostat.target_t.value);
+        }
+        
+        if (thermostat.tmp && thermostat.tmp.value !== undefined) {
+          this.thermostatService
+            .updateCharacteristic(this.hap.Characteristic.CurrentTemperature, thermostat.tmp.value);
+        }
+
+        const isEnabled = thermostat.target_t && thermostat.target_t.enabled === true;
+        const targetState = isEnabled
+          ? this.hap.Characteristic.TargetHeatingCoolingState.HEAT
+          : this.hap.Characteristic.TargetHeatingCoolingState.OFF;
+        this.thermostatService
+          .updateCharacteristic(this.hap.Characteristic.TargetHeatingCoolingState, targetState);
+
+        const valvePos = thermostat.pos !== undefined ? thermostat.pos : 0;
+        const currentState = valvePos > 10
+          ? this.hap.Characteristic.CurrentHeatingCoolingState.HEAT
+          : this.hap.Characteristic.CurrentHeatingCoolingState.OFF;
+        this.thermostatService
+          .updateCharacteristic(this.hap.Characteristic.CurrentHeatingCoolingState, currentState);
+      }
+    } catch (error) {
+      this.log.error('Fehler beim Initialisieren der Characteristics:', error.message);
+      // Setze zumindest Default-Werte
+      this.thermostatService
+        .updateCharacteristic(this.hap.Characteristic.TargetTemperature, 20)
+        .updateCharacteristic(this.hap.Characteristic.CurrentTemperature, 20);
+    }
   }
 
   // Status-Polling
