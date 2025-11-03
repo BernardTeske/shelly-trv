@@ -263,8 +263,8 @@ class ShellyTRVAccessory {
       this.thermostatService
         .updateCharacteristic(this.hap.Characteristic.TemperatureDisplayUnits, this.hap.Characteristic.TemperatureDisplayUnits.CELSIUS);
 
-      // Versuche aktuelle Werte zu laden
-      const status = await this.apiClient.getStatus();
+      // Versuche aktuelle Werte zu laden (beim Start frische Daten holen)
+      const status = await this.apiClient.getStatus(true);
       if (status && status.thermostats && status.thermostats[0]) {
         const thermostat = status.thermostats[0];
         
@@ -314,7 +314,8 @@ class ShellyTRVAccessory {
 
   async updateStatus() {
     try {
-      const status = await this.apiClient.getStatus();
+      // Beim Polling immer frische Daten holen (forceRefresh = true)
+      const status = await this.apiClient.getStatus(true);
       if (status && status.thermostats && status.thermostats[0]) {
         const thermostat = status.thermostats[0];
         
