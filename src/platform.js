@@ -6,12 +6,63 @@ class ShellyTRVPlatform {
     this.config = config || {};
     this.api = api;
     this.accessories = [];
+    
+    // Request-Queue für serielle Abarbeitung von Requests
+    this.requestQueue = [];
+    this.processingQueue = false;
+    this.requestDelay = 500; // 500ms Verzögerung zwischen Requests
 
     // Warte auf Homebridge initialisierung
     this.api.on('didFinishLaunching', () => {
       this.log('Shelly TRV Platform gestartet');
       this.loadAccessories();
     });
+  }
+
+  /**
+   * Fügt eine Request-Funktion zur Queue hinzu
+   * Requests werden nacheinander abgearbeitet, um Überlastung zu vermeiden
+   * @param {Function} requestFn - Async Funktion, die den Request ausführt
+   * @returns {Promise} - Promise, das mit dem Request-Ergebnis resolved wird
+   */
+  async queueRequest(requestFn) {
+    return new Promise((resolve, reject) => {
+      this.requestQueue.push({
+        fn: requestFn,
+        resolve,
+        reject
+      });
+      this.processQueue();
+    });
+  }
+
+  /**
+   * Verarbeitet die Request-Queue nacheinander
+   */
+  async processQueue() {
+    if (this.processingQueue || this.requestQueue.length === 0) {
+      return;
+    }
+
+    this.processingQueue = true;
+
+    while (this.requestQueue.length > 0) {
+      const item = this.requestQueue.shift();
+      
+      try {
+        const result = await item.fn();
+        item.resolve(result);
+      } catch (error) {
+        item.reject(error);
+      }
+
+      // Verzögerung zwischen Requests (außer beim letzten)
+      if (this.requestQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, this.requestDelay));
+      }
+    }
+
+    this.processingQueue = false;
   }
 
   configureAccessory(accessory) {
@@ -46,8 +97,8 @@ class ShellyTRVPlatform {
         this.log('Accessory bereits vorhanden:', accessory.displayName);
       }
 
-      // Initialisiere Shelly TRV Service
-      new ShellyTRVAccessory(this.log, accessory, deviceConfig, this.api);
+      // Initialisiere Shelly TRV Service (mit Platform-Referenz für Request-Queue)
+      new ShellyTRVAccessory(this.log, accessory, deviceConfig, this.api, this);
     });
   }
 }

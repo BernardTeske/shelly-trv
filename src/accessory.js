@@ -1,15 +1,16 @@
 const ShellyAPIClient = require('./api-client');
 
 class ShellyTRVAccessory {
-  constructor(log, accessory, config, api) {
+  constructor(log, accessory, config, api, platform) {
     this.log = log;
     this.accessory = accessory;
     this.config = config;
     this.api = api;
     this.hap = api.hap;
+    this.platform = platform; // Platform-Instanz für Request-Queue
 
     // API Client initialisieren
-    this.apiClient = new ShellyAPIClient(log, config.ip);
+    this.apiClient = new ShellyAPIClient(log, config.ip, platform);
 
     // Logging-Tracking für reduziertes Logging
     this.lastStatusLog = null;
