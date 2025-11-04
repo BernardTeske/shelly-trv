@@ -11,6 +11,9 @@ class ShellyTRVAccessory {
     // API Client initialisieren
     this.apiClient = new ShellyAPIClient(log, config.ip);
 
+    // Logging-Tracking für reduziertes Logging
+    this.lastStatusLog = null;
+
     // Service erstellen oder abrufen
     this.thermostatService = this.accessory.getService(this.hap.Service.Thermostat) ||
                              this.accessory.addService(this.hap.Service.Thermostat);
@@ -306,16 +309,18 @@ class ShellyTRVAccessory {
     // Initiale Status-Aktualisierung
     this.updateStatus();
 
-    // Polling alle 15 Sekunden
+    // Polling alle 60 Sekunden (reduziert Traffic erheblich)
+    // Die Getter-Methoden nutzen den Cache, daher ist häufiges Polling nicht nötig
     this.pollInterval = setInterval(() => {
       this.updateStatus();
-    }, 15000);
+    }, 60000); // 60 Sekunden statt 15
   }
 
   async updateStatus() {
     try {
-      // Beim Polling immer frische Daten holen (forceRefresh = true)
-      const status = await this.apiClient.getStatus(true);
+      // Beim Polling nutzen wir den Cache, wenn er noch gültig ist (weniger Traffic)
+      // Nur wenn Cache abgelaufen ist, holen wir neue Daten
+      const status = await this.apiClient.getStatus(false);
       if (status && status.thermostats && status.thermostats[0]) {
         const thermostat = status.thermostats[0];
         
@@ -353,9 +358,14 @@ class ShellyTRVAccessory {
         this.thermostatService
           .updateCharacteristic(this.hap.Characteristic.CurrentHeatingCoolingState, currentState);
 
-        const currentTemp = thermostat.tmp && thermostat.tmp.value !== undefined ? thermostat.tmp.value : 'N/A';
-        const targetTemp = thermostat.target_t && thermostat.target_t.value !== undefined ? thermostat.target_t.value : 'N/A';
-        this.log.debug(`Status aktualisiert - Temp: ${currentTemp}°C, Target: ${targetTemp}°C, Valve: ${valvePos}%, Enabled: ${isEnabled}`);
+        // Debug-Logging reduziert - nur bei Änderungen oder alle 5 Minuten
+        const now = Date.now();
+        if (!this.lastStatusLog || (now - this.lastStatusLog) > 300000) { // Alle 5 Minuten
+          const currentTemp = thermostat.tmp && thermostat.tmp.value !== undefined ? thermostat.tmp.value : 'N/A';
+          const targetTemp = thermostat.target_t && thermostat.target_t.value !== undefined ? thermostat.target_t.value : 'N/A';
+          this.log.debug(`Status aktualisiert - Temp: ${currentTemp}°C, Target: ${targetTemp}°C, Valve: ${valvePos}%, Enabled: ${isEnabled}`);
+          this.lastStatusLog = now;
+        }
       }
     } catch (error) {
       this.log.error('Fehler beim Status-Update:', error.message);

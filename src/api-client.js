@@ -10,7 +10,7 @@ class ShellyAPIClient {
     // Cache für Status-Abfragen
     this.statusCache = null;
     this.statusCacheTimestamp = null;
-    this.statusCacheTTL = 30000; // 5 Sekunden Cache-TTL
+    this.statusCacheTTL = 60000; // 60 Sekunden Cache-TTL (reduziert Traffic)
   }
 
   /**
@@ -33,7 +33,7 @@ class ShellyAPIClient {
   async getStatus(forceRefresh = false) {
     // Prüfe Cache, wenn nicht erzwungen
     if (!forceRefresh && this.isCacheValid()) {
-      this.log.debug(`Status aus Cache gelesen für ${this.ipAddress}`);
+      // Cache wird genutzt - kein Log um Traffic zu reduzieren
       return this.statusCache;
     }
 
@@ -46,7 +46,10 @@ class ShellyAPIClient {
         // Aktualisiere Cache
         this.statusCache = response.data;
         this.statusCacheTimestamp = Date.now();
-        this.log.debug(`Status vom Gerät abgerufen und Cache aktualisiert für ${this.ipAddress}`);
+        // Nur bei forceRefresh loggen, um Traffic zu reduzieren
+        if (forceRefresh) {
+          this.log.debug(`Status vom Gerät abgerufen und Cache aktualisiert für ${this.ipAddress}`);
+        }
         return response.data;
       }
       throw new Error('Keine Daten in der Antwort erhalten');
