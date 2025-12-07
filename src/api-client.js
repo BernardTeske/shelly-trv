@@ -1,10 +1,12 @@
 const axios = require('axios');
 
 class ShellyAPIClient {
-  constructor(log, ipAddress, platform) {
+  constructor(log, ipAddress, platform, alternativeIpAddress = null) {
     this.log = log;
     this.ipAddress = ipAddress;
+    this.alternativeIpAddress = alternativeIpAddress;
     this.baseURL = `http://${ipAddress}`;
+    this.alternativeBaseURL = alternativeIpAddress ? `http://${alternativeIpAddress}` : null;
     this.timeout = 5000; // 5 Sekunden Timeout
     this.platform = platform; // Platform-Instanz für Request-Queue
     
@@ -133,21 +135,53 @@ class ShellyAPIClient {
 
   /**
    * Interne Methode zum Setzen der Temperatur (ohne Queue)
+   * Sendet den Request an beide IPs, falls alternative IP konfiguriert ist
    * @param {number} temperature - Temperatur in Grad Celsius
    * @returns {Promise<Object>}
    */
   async _setTargetTemperatureInternal(temperature) {
     const url = `${this.baseURL}/settings/thermostat/0?target_t_enabled=1&target_t=${temperature}`;
-    const response = await axios.get(url, {
-      timeout: this.timeout
-    });
     
-    this.log(`Target Temperature erfolgreich gesetzt: ${temperature}°C`);
+    // Sende Request an Haupt-IP
+    const promises = [
+      axios.get(url, {
+        timeout: this.timeout
+      })
+    ];
+    
+    // Wenn alternative IP vorhanden ist, sende auch dort
+    if (this.alternativeBaseURL) {
+      const alternativeUrl = `${this.alternativeBaseURL}/settings/thermostat/0?target_t_enabled=1&target_t=${temperature}`;
+      promises.push(
+        axios.get(alternativeUrl, {
+          timeout: this.timeout
+        }).catch(error => {
+          // Logge Fehler bei alternativer IP, aber wirf keinen Fehler
+          this.log.warn(`Fehler beim Setzen der Temperatur an alternativer IP ${this.alternativeIpAddress}: ${error.message}`);
+          return null; // Ignoriere Fehler bei alternativer IP
+        })
+      );
+    }
+    
+    // Warte auf beide Requests (oder nur einen, wenn keine alternative IP)
+    const results = await Promise.all(promises);
+    
+    // Haupt-IP Response zurückgeben
+    const mainResponse = results[0];
+    if (!mainResponse || !mainResponse.data) {
+      throw new Error('Fehler beim Setzen der Temperatur am Hauptgerät');
+    }
+    
+    if (this.alternativeIpAddress) {
+      this.log(`Target Temperature erfolgreich gesetzt: ${temperature}°C (Haupt: ${this.ipAddress}, Alternativ: ${this.alternativeIpAddress})`);
+    } else {
+      this.log(`Target Temperature erfolgreich gesetzt: ${temperature}°C`);
+    }
     
     // Cache invalideren, da sich der Status geändert hat
     this.invalidateCache();
     
-    return response.data;
+    return mainResponse.data;
   }
 
   /**

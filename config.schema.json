@@ -30,6 +30,13 @@
               "required": true,
               "format": "ipv4",
               "description": "IP-Adresse des Shelly TRV Geräts im lokalen Netzwerk"
+            },
+            "alternativeIp": {
+              "title": "Alternative IP-Adresse",
+              "type": "string",
+              "required": false,
+              "format": "ipv4",
+              "description": "Optionale alternative IP-Adresse eines weiteren Heizventils, das synchron gesteuert werden soll"
             }
           }
         },

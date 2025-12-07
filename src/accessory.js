@@ -9,8 +9,8 @@ class ShellyTRVAccessory {
     this.hap = api.hap;
     this.platform = platform; // Platform-Instanz für Request-Queue
 
-    // API Client initialisieren
-    this.apiClient = new ShellyAPIClient(log, config.ip, platform);
+    // API Client initialisieren (mit optionaler alternativer IP)
+    this.apiClient = new ShellyAPIClient(log, config.ip, platform, config.alternativeIp || null);
 
     // Logging-Tracking für reduziertes Logging
     this.lastStatusLog = null;
