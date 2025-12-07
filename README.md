@@ -13,6 +13,9 @@ Dieses Plugin ermöglicht die Steuerung von Shelly TRV Gen1 Heizkörperthermosta
 - **Ventil-Position/Status**: Der Heizstatus wird basierend auf der Ventilposition angezeigt
 - **Mehrere Geräte**: Unterstützung für mehrere Shelly TRV Ventile
 - **Automatische Aktualisierung**: Status wird regelmäßig automatisch aktualisiert
+- **Alternative IP-Adresse**: Unterstützung für alternative IP-Adressen (z.B. bei Dual-Network-Setups)
+- **Intelligenter Cache**: Reduziert Netzwerk-Traffic durch Caching
+- **Request-Queue**: Verhindert Überlastung durch serielle Request-Abarbeitung
 
 ## Voraussetzungen
 
@@ -64,6 +67,7 @@ Eine Liste von Shelly TRV Geräten mit folgenden Eigenschaften:
 
 - **name**: Der Name, der in Apple Home angezeigt wird
 - **ip**: Die IP-Adresse des Shelly TRV Geräts im lokalen Netzwerk (IPv4)
+- **alternativeIp** (optional): Alternative IP-Adresse für das Gerät. Wenn konfiguriert, werden Temperaturänderungen an beide IP-Adressen gesendet. Nützlich bei Dual-Network-Setups oder wenn das Gerät über mehrere Netzwerke erreichbar ist.
 
 ### Beispiel-Konfiguration
 
@@ -82,11 +86,30 @@ Eine Liste von Shelly TRV Geräten mit folgenden Eigenschaften:
     },
     {
       "name": "Küche Heizung",
-      "ip": "192.168.1.102"
+      "ip": "192.168.1.102",
+      "alternativeIp": "192.168.2.102"
     }
   ]
 }
 ```
+
+### Alternative IP-Adresse
+
+Wenn ein Gerät über mehrere Netzwerke erreichbar ist (z.B. WLAN und LAN), können Sie eine alternative IP-Adresse konfigurieren. Beim Setzen der Temperatur werden dann beide IP-Adressen angesprochen:
+
+```json
+{
+  "name": "Wohnzimmer Heizung",
+  "ip": "192.168.1.100",
+  "alternativeIp": "192.168.2.100"
+}
+```
+
+**Hinweis**: 
+- Die alternative IP ist optional
+- Status-Abfragen erfolgen nur über die Haupt-IP (`ip`)
+- Temperaturänderungen werden an beide IPs gesendet
+- Fehler bei der alternativen IP werden geloggt, führen aber nicht zum Abbruch
 
 ## Funktionen
 

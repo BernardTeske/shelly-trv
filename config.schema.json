@@ -36,7 +36,7 @@
               "type": "string",
               "required": false,
               "format": "ipv4",
-              "description": "Optionale alternative IP-Adresse eines weiteren Heizventils, das synchron gesteuert werden soll"
+              "description": "Optionale alternative IP-Adresse desselben Geräts (z.B. bei Dual-Network-Setups). Temperaturänderungen werden an beide IPs gesendet."
             }
           }
         },
